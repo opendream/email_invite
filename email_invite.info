@@ -1,0 +1,6 @@
+; $Id: $ 
+name = Email Invite
+description = Invite friends via email
+version  = 6.x-1.0
+core = 6.x
+package = opendream

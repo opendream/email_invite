@@ -1,0 +1,513 @@
+<?php
+
+function email_invite_menu() {
+  $items['email_invite/invite/%/%/%'] = array(
+    'title' => 'Invite friends',
+    'page callback' => 'email_invite_return',
+    'page arguments' => array(2, 3, 4),
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );  
+
+  $items['admin/settings/email_invite'] = array(
+    'title' => 'Email invite settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('email_invite_settings_form'),
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_CALLBACK,
+  );  
+
+  return $items;
+}
+
+function email_invite_return($service , $form_id, $field_name) {
+
+  $output .= '<html><head></head><body>';
+  $output .= '<script type="text/javascript" src="/sites/all/modules/contrib/jquery_update/replace/jquery.min.js"></script>';
+  //$output .= _email_invite_google($form_id, $field_name);
+  $output .= call_user_func('_email_invite_'.$service, $form_id, $field_name);
+  $output .= '</body></html>';
+  print $output;
+
+}
+
+function email_invite_process_name($name, $address) {
+  if (!trim($name) || strpos($name, '@')) {
+    $name = explode('@', $address);
+    $name = ucfirst(str_replace('.', ' ', $name[0]));
+  }
+  return $name;
+}
+
+function _email_invite_google($form_id=FALSE, $field_name=FALSE, $reset=FALSE) {
+  require_once drupal_get_path('module', 'email_invite').'/lib/google-api-php-client/src/Google_Client.php';
+
+  $node = $_GET['nid']? node_load($_GET['nid']): FALSE;
+
+  $output = '';
+
+
+  $client_id = variable_get('email_invite_google_client_id', '');
+  $client_secret = variable_get('email_invite_google_client_secret', '');
+  $application_name = variable_get('email_invite_google_application_name', '');
+
+
+  $client = new Google_Client();
+  $client->setApplicationName($application_name);
+  $client->setScopes('http://www.google.com/m8/feeds/');
+
+  // Documentation: http://code.google.com/apis/gdata/docs/2.0/basics.html
+  // Visit https://code.google.com/apis/console?api=contacts to generate your
+  // oauth2_client_id, oauth2_client_secret, and register your oauth2_redirect_uri.
+  $client->setClientId($client_id);
+  $client->setClientSecret($client_secret);
+  //$client->setRedirectUri('https://taejai.com/oauth2callback');
+  $client->setRedirectUri(url('email_invite/invite/google/'.$form_id.'/'.$field_name, array('absolute' => TRUE)));
+  //$client->setDeveloperKey('insert_your_developer_key');
+
+  if (isset($_GET['code'])) {
+    $client->authenticate();
+    $_SESSION['token_google'] = $client->getAccessToken();
+    //$redirect = 'https://' . $_SERVER['HTTP_HOST'];
+    //header('Location: ' . filter_var($redirect, FILTER_SANITIZE_URL));
+    drupal_goto($_GET['q']);
+  }
+
+  if (isset($_SESSION['token_google'])) {
+   $client->setAccessToken($_SESSION['token_google']);
+  }
+  
+  if ($reset || isset($_REQUEST['logout'])) {
+    unset($_SESSION['token_google']);
+    $client->revokeToken();
+  }
+
+  if (isset($_GET['error'])) {
+    $output .= '<script language="javascript" type="text/javascript">
+    window.close();
+    </script>';
+  }
+  
+  if ($client->getAccessToken()) {
+    $req = new Google_HttpRequest('https://www.google.com/m8/feeds/contacts/default/full?max-results=1000');
+    $val = $client->getIo()->authenticatedRequest($req);
+  
+    $doc = new DOMDocument;
+    $doc->recover = true;
+    $doc->loadXML($val->getResponseBody());
+
+    $xpath = new DOMXPath($doc);
+    $xpath->registerNamespace('gd', 'http://schemas.google.com/g/2005');
+    
+    $emails = $xpath->query('//gd:email');
+    
+    $email_list = array();
+
+    foreach ( $emails as $email ) {
+      $name = $email->parentNode->getElementsByTagName('title')->item(0)->textContent;
+      $address = $email->getAttribute('address');
+
+      $name = email_invite_process_name($name, $address);
+      if (trim($address)) {
+        $email_list[$address] = $name;
+      }
+    }
+
+    $output .= '<script language="javascript" type="text/javascript">
+
+    window.opener.window.pullContacts("'.$form_id.'", "'.$field_name.'", JSON.parse(\''.drupal_to_js($email_list).'\'));
+    window.close();
+
+    </script>';
+  
+    // The access token may have been updated lazily.
+    $_SESSION['token_google'] = $client->getAccessToken();
+  }
+  $auth = $client->createAuthUrl();
+  
+  
+  if (!$_GET['code'] && isset($auth)) {
+      $output .= '<button class="login gmail login-gmail" value="'.$auth.'">Gmail</button>';
+
+      //$output .= theme('email_invite_js_render_contact_selector', $form_id, $field_name);
+
+      $output .= '<script language="javascript" type="text/javascript">
+
+      $(".login-gmail").click(function (e) { 
+        e.preventDefault(); 
+	new_window = window.open($(this).val(), "google_login", "width=500,height=500"); 
+      })
+      
+      </script>';
+
+    } else {
+      $output .= '<a class="logout" href="?logout">Logout</a>';
+  }
+  
+  //$output .= print_r($node, 1);
+  
+  return $output;
+
+}
+
+function _email_invite_msn($form_id=FALSE, $field_name=FALSE, $reset=FALSE) {
+
+  $node = $_GET['nid']? node_load($_GET['nid']): FALSE;
+
+  $output = '';
+
+
+  $client_id = variable_get('email_invite_msn_client_id', '');
+  $client_secret = variable_get('email_invite_msn_client_secret', '');
+  $application_name = variable_get('email_invite_msn_application_name', '');
+
+  $redirect_uri = url('email_invite/invite/msn/'.$form_id.'/'.$field_name, array('absolute' => TRUE));
+  $urls_ = 'https://login.live.com/oauth20_authorize.srf?client_id='.$client_id.'&scope=wl.signin%20wl.basic%20wl.emails%20wl.contacts_emails&response_type=code&redirect_uri='.$redirect_uri;
+
+
+  function curl_file_get_contents($url) {
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_AUTOREFERER, TRUE);
+    curl_setopt($ch, CURLOPT_HEADER, 0);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, TRUE);
+    $data = curl_exec($ch);
+    curl_close($ch);
+    return $data;
+  }
+
+  
+  if (isset($_GET['code'])) {
+    $auth_code = $_GET["code"];
+
+
+    $fields=array(
+      'code'=>  urlencode($auth_code),
+      'client_id'=>  urlencode($client_id),
+      'client_secret'=>  urlencode($client_secret),
+      'redirect_uri'=>  urlencode($redirect_uri),
+      'grant_type'=>  urlencode('authorization_code')
+    );
+
+    $post = '';
+    foreach($fields as $key=>$value) { $post .= $key.'='.$value.'&'; }
+
+    $post = rtrim($post,'&');
+    $curl = curl_init();
+    curl_setopt($curl,CURLOPT_URL,'https://login.live.com/oauth20_token.srf');
+    curl_setopt($curl,CURLOPT_POST,5);
+    curl_setopt($curl,CURLOPT_POSTFIELDS,$post);
+    curl_setopt($curl, CURLOPT_RETURNTRANSFER,TRUE);
+    curl_setopt($curl, CURLOPT_SSL_VERIFYPEER,0);
+    $result = curl_exec($curl);
+    curl_close($curl);
+    
+    $response =  json_decode($result);
+    $accesstoken = $response->access_token;
+    $url = 'https://apis.live.net/v5.0/me/contacts?access_token='.$accesstoken.'&limit=1000';
+    $xmlresponse =  curl_file_get_contents($url);
+    $xml = json_decode($xmlresponse, true);
+    $msn_email = "";
+    
+    $email_list = array();
+    foreach($xml['data'] as $item) {
+
+      $name = $item['name'];
+      foreach (array_unique($item['emails']) as $address) {
+        
+        if (trim($address)) {
+          $email_list[$address] = email_invite_process_name($name, $address);
+        }
+      }
+    }
+
+    $output .= '<script language="javascript" type="text/javascript">
+
+    window.opener.window.pullContacts("'.$form_id.'", "'.$field_name.'", JSON.parse(\''.drupal_to_js($email_list).'\'));
+    window.close();
+
+    </script>';
+  
+    // The access token may have been updated lazily.
+    $_SESSION['token_msn'] = $accesstoken;
+
+  }
+  else {
+
+    $output .= '<button class="login msn login-msn" value="'.$urls_.'">Live</button>';
+
+    $output .= '<script language="javascript" type="text/javascript">
+
+    $(".login-msn").click(function (e) { 
+      e.preventDefault(); 
+      new_window = window.open($(this).val(), "msn_login", "width=500,height=500"); 
+    })
+    
+    </script>';
+
+  }
+
+
+  if (isset($_GET['error'])) {
+    $output .= '<script language="javascript" type="text/javascript">
+    window.close();
+    </script>';
+  }
+
+
+  //$output .= theme('email_invite_js_render_contact_selector', $form_id, $field_name);
+
+  return $output;
+}
+
+
+function _email_invite_yahoo($form_id=FALSE, $field_name=FALSE, $reset=FALSE) {
+
+  require_once drupal_get_path('module', 'email_invite').'/lib/yos-social-php/lib/Yahoo.inc';
+
+  $node = $_GET['nid']? node_load($_GET['nid']): FALSE;
+
+  $output = '';
+
+
+  $client_id = variable_get('email_invite_yahoo_client_id', '');
+  $client_secret = variable_get('email_invite_yahoo_client_secret', '');
+  $application_name = variable_get('email_invite_yahoo_application_name', '');
+
+  if(array_key_exists("logout", $_GET)) {
+    // if a session exists and the logout flag is detected
+    // clear the session tokens and reload the page.
+    YahooSession::clearSession();
+    //header("Location: sampleapp.php");
+  }
+
+  $hasSession = YahooSession::hasSession($client_id, $client_secret, $application_name);
+
+  // create the callback url,
+  //$callback = YahooUtil::current_url()."?in_popup";
+  $callback = url('email_invite/invite/yahoo/'.$form_id.'/'.$field_name, array('absolute' => TRUE, 'query' => 'in_popup=1'));
+  
+  // pass the credentials to get an auth url.
+  // this URL will be used for the pop-up.
+  $auth_url = YahooSession::createAuthorizationUrl($client_id, $client_secret, $callback);
+
+
+  if($hasSession) {
+    $session = YahooSession::requireSession($client_id, $client_secret, $application_name);
+  }
+  
+    // if a session is initialized, fetch the user's profile information
+  if($hasSession) {
+    // Get the currently sessioned user.
+    //$user = $session->getSessionedUser();
+    $query = sprintf("select * from social.contacts where guid=me;");
+    $response = $session->query($query); 
+
+    $email_list = array();
+
+    if(isset($response)){
+    
+      foreach($response->query->results->contact as $id){
+        
+        $name = '';
+        $address = '';
+    
+        foreach($id->fields as $subid){
+    
+          if ($subid->type == 'email') {
+            $address = $subid->value;
+          }
+          elseif ($subid->type == 'name') {
+            $name = $subid->value->givenName. ' '.$subid->value->familyName;
+          }
+        }
+
+        $name = email_invite_process_name($name, $address);
+        if (trim($address)) {
+          $email_list[$address] = $name;
+        }
+
+      }
+    }
+    
+    if (array_key_exists("in_popup", $_GET)) {
+      $output .= '<script language="javascript" type="text/javascript">
+
+      window.opener.window.pullContacts("'.$form_id.'", "'.$field_name.'", JSON.parse(\''.drupal_to_js($email_list).'\'));
+      $(".login-yahoo", window.opener.document).val("'.$auth_url.'");
+      window.close();
+
+      </script>';
+    }
+
+
+
+    // Load the profile for the current user.
+    //$profile = $user->getProfile();
+  }
+  
+
+  if(!array_key_exists("in_popup", $_GET)) {
+
+    $output .= '<button class="login yahoo login-yahoo" value="'.$auth_url.'">Yahoo</button>';
+
+    $output .= '<script language="javascript" type="text/javascript">
+
+    $(".login-yahoo").click(function (e) { 
+      e.preventDefault(); 
+      new_window = window.open($(this).val(), "yahoo_login", "width=500,height=500"); 
+    })
+    
+    </script>';
+  }
+ 
+  return $output;
+
+}
+
+function email_invite_theme($existing, $type, $theme, $path) {
+  return array(
+    'email_invite_js_render_contact_selector' => array(
+      'arguments' => array(
+        'form_id' => NULL,
+        'field_name' => NULL,
+        
+      ),
+      'template' => 'email-invite-js-render-contact-selector',
+    ),
+    'email_invite_list' => array(
+      'arguments' => array(
+        'form_id' => NULL,
+        'field_name' => NULL,
+        
+      ),
+    ),
+  );
+}
+
+
+function email_invite_settings_form() {
+
+  $form['email_invite_form_ids'] = array(
+    '#type' => 'textarea',
+    '#title' => 'Allow form ids / field names',
+    '#description' => 'Split by enter line. Ex: node_invite_send|emails,invites',
+    '#default_value' => variable_get('email_invite_form_ids', ''),
+  );
+
+  $form['google'] = array(
+    '#type' => 'fieldset',
+    '#title' => 'Google contacts API',
+    '#description' => l('Google console', 'https://console.developers.google.com/project/apps~taejai-local-contacts/apiui/credential'),
+  );
+  $form['google']['email_invite_google_application_name'] = array(
+    '#type' => 'textfield',
+    '#title' => 'Application Name',
+    '#default_value' => variable_get('email_invite_google_application_name', ''),
+  );
+  $form['google']['email_invite_google_client_id'] = array(
+    '#type' => 'textfield',
+    '#title' => 'Client Id',
+    '#default_value' => variable_get('email_invite_google_client_id', ''),
+  );
+  $form['google']['email_invite_google_client_secret'] = array(
+    '#type' => 'textfield',
+    '#title' => 'Client Secret',
+    '#default_value' => variable_get('email_invite_google_client_secret', ''),
+  );
+
+
+  $form['msn'] = array(
+    '#type' => 'fieldset',
+    '#title' => 'MSN contacts API',
+    '#description' => l('MSN Create Application', 'https://account.live.com/developers/applications/create'),
+  );
+  $form['msn']['email_invite_msn_client_id'] = array(
+    '#type' => 'textfield',
+    '#title' => 'Client Id',
+    '#default_value' => variable_get('email_invite_msn_client_id', ''),
+  );
+  $form['msn']['email_invite_msn_client_secret'] = array(
+    '#type' => 'textfield',
+    '#title' => 'Client Secret',
+    '#default_value' => variable_get('email_invite_msn_client_secret', ''),
+  );
+
+
+  $form['yahoo'] = array(
+    '#type' => 'fieldset',
+    '#title' => 'Yahoo contacts API',
+    '#description' => l('Yahoo Create Project', 'https://developer.apps.yahoo.com/dashboard/createKey.html'),
+  );
+  $form['yahoo']['email_invite_yahoo_application_name'] = array(
+    '#type' => 'textfield',
+    '#title' => 'Application ID',
+    '#default_value' => variable_get('email_invite_yahoo_application_name', ''),
+  );
+  $form['yahoo']['email_invite_yahoo_client_id'] = array(
+    '#type' => 'textfield',
+    '#title' => 'Consumer Key',
+    '#default_value' => variable_get('email_invite_yahoo_client_id', ''),
+  );
+  $form['yahoo']['email_invite_yahoo_client_secret'] = array(
+    '#type' => 'textfield',
+    '#title' => 'Consumer Secret',
+    '#default_value' => variable_get('email_invite_yahoo_client_secret', ''),
+  );
+
+
+  return system_settings_form($form);
+
+}
+
+
+function theme_email_invite_list($form_id, $field_name) {
+
+  drupal_add_css(drupal_get_path('module', 'email_invite').'/email_invite.css');
+
+  $output = theme('item_list', array(
+    _email_invite_google($form_id, $field_name, TRUE),
+    _email_invite_msn($form_id, $field_name, TRUE),
+    _email_invite_yahoo($form_id, $field_name, TRUE),
+  ), NULL, 'ul', array('class' => 'email-invite-list'));
+
+  $output .= theme('email_invite_js_render_contact_selector', $form_id, $field_name);
+
+  return $output;
+
+}
+
+function email_invite_build_form(&$form, $allow_field_names, $origin) {
+
+  if (!is_array($form)) {
+    return FALSE;
+  }
+
+  foreach ($form as $key => &$value) {
+    if (substr($key, 0, 1) != '#' && is_array($value)) {
+      if (in_array($key, $allow_field_names) && $value['#type'] == 'textarea') {
+        $value['#description'] = theme('email_invite_list', $origin['#id'], $key);
+      
+      }
+      email_invite_build_form($value, $allow_field_names, $origin);
+    }
+
+
+  }
+}
+
+function email_invite_form_alter(&$form, &$form_state, $form_id) {
+
+  $allow_list = array();
+
+  foreach (explode("\n", variable_get('email_invite_form_ids', '')) as $allow) {
+
+    list($allow_form_id, $allow_field_names) = explode('|', $allow);
+    $allow_list[$allow_form_id] = explode(',', $allow_field_names);
+  }
+
+  if (in_array($form_id, array_keys($allow_list))) {
+    email_invite_build_form($form, $allow_list[$form_id], $form);
+  }
+}
