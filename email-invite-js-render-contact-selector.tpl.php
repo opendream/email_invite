@@ -7,10 +7,12 @@
   eisr += '  <div class="email-invite-selector">';
   eisr += '  ';
   eisr += '    <h3><?php print t('Add email people you know for invite them to support project'); ?></h3>';
-  eisr += '  ';
   eisr += '    <form method="post" action="" id="email-invite-selector-form">';
-  eisr += '  ';
-  eisr += '    <p class="filter"><?php print t('Choose whom to email') ?>: <a href="#" class="select-all"><?php print t('select all'); ?></a>/ <a href="#" class="select-none"><?php print t('none'); ?></a> </p>';
+  eisr += '      <p class="email-invite-search-wrapper">';
+  eisr += '        <label for="email-invite-search-id"><?php print t('Type for search your contacts'); ?></label>';
+  eisr += '        <input id="email-invite-search-id" class="email-invite-search" value="" name="email_invite_search" />';
+  eisr += '      </p>';
+  eisr += '      <p class="filter"><?php print t('Choose whom to email') ?>: <a href="#" class="select-all"><?php print t('select all'); ?></a>/ <a href="#" class="select-none"><?php print t('none'); ?></a> </p>';
   eisr += '  ';
   eisr += '      <ul class="email-invite-selector-list">';
   eisr += '      </ul>';
@@ -34,6 +36,38 @@
     });
     return result;
   }
+
+  $('.email-invite-search').keyup(function (e) {
+
+    var keyword = $(this).val().toLowerCase();
+    
+    if (keyword) {
+
+      $('.email-invite-selector-item').each(function () {
+        if ($(this).text().toLowerCase().indexOf(keyword) >= 0) {
+          $(this).show();
+        }
+        else {
+          $(this).hide();
+        }
+      });
+
+    }
+    else {
+      $('.email-invite-selector-item').show();    
+    }
+
+  });
+
+  $('.email-invite-search').focus(function () {
+    $('label[for=email-invite-search-id]').hide();
+  }).blur(function () {
+    
+    if (!$(this).val()) {
+      $('label[for=email-invite-search-id]').show();
+    }
+
+  });
 
   window.pullContacts = function (form_id, field_name, contacts) {
 

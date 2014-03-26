@@ -28,15 +28,16 @@
   margin-bottom: 5px;
   border-bottom: 1px solid #efefef; }
 
-#edit-emails-wrapper h3 {
+.email-invite-list h3 {
   margin-bottom: 30px; }
-#edit-emails-wrapper .email-invite-list {
+.item-list ul.email-invite-list {
   margin: 10px 0;
   padding-bottom: 5px; }
-#edit-emails-wrapper ul li {
+.item-list ul.email-invite-list li {
   list-style: none;
+  float: left;
   margin: 0; }
-#edit-emails-wrapper .login {
+.email-invite-list .login {
   width: 110px;
   height: 32px;
   margin-right: 10px;
@@ -56,23 +57,22 @@
   -webkit-transition: all 0.3s;
   -moz-transition: all 0.3s;
   transition: all 0.3s;
-  float: left;
   padding-left: 50px;
   text-align: left; }
-  #edit-emails-wrapper .login.gmail {
+  .email-invite-list .login.gmail {
     background: #e04c40 url("ico-email.png") no-repeat 15px 8px;
     box-shadow: 0 3px #C93F34; }
-    #edit-emails-wrapper .login.gmail:hover {
+    .email-invite-list .login.gmail:hover {
       background-color: #C93F34; }
-  #edit-emails-wrapper .login.yahoo {
+  .email-invite-list .login.yahoo {
     background: #640f6c url("ico-email.png") no-repeat 15px -174px;
     box-shadow: 0 3px #3C0941; }
-    #edit-emails-wrapper .login.yahoo:hover, #edit-emails-wrapper .login.yahoo:active {
+    .email-invite-list .login.yahoo:hover, #edit-emails-wrapper .login.yahoo:active {
       background-color: #3C0941; }
-  #edit-emails-wrapper .login.msn {
+  .email-invite-list .login.msn {
     background: #0cb3ee url("ico-email.png") no-repeat 10px -90px;
     box-shadow: 0 3px #0495C9; }
-    #edit-emails-wrapper .login.msn:hover, #edit-emails-wrapper .login.msn:active {
+    .email-invite-list .login.msn:hover, #edit-emails-wrapper .login.msn:active {
       background-color: #0495C9; }
 
 .email-invite-name {
@@ -95,3 +95,18 @@
 .email-invite-selector h3 {
   color: #333;
   font-weight: normal; }
+
+.email-invite-search-wrapper {
+  position: relative;
+}
+#email-invite-selector-form label {
+  position: absolute;
+  top: 3px;
+  left: 6px;
+}
+.email-invite-search {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+

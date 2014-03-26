@@ -487,7 +487,11 @@ function email_invite_build_form(&$form, $allow_field_names, $origin) {
   foreach ($form as $key => &$value) {
     if (substr($key, 0, 1) != '#' && is_array($value)) {
       if (in_array($key, $allow_field_names) && $value['#type'] == 'textarea') {
-        $value['#description'] = theme('email_invite_list', $origin['#id'], $key);
+        $value['#prefix'] = theme('email_invite_list', $origin['#id'], $key);
+        if ($value['#title']) {
+          $value['#prefix'] = '<div class="form-item"><label for="edit-'.$key.'">'.$value['#title'].': </label>'.t('Invite your contacts by your email accounts').$value['#prefix'].t('or invite email address').'</div>';
+        }
+        unset($value['#title']);
       
       }
       email_invite_build_form($value, $allow_field_names, $origin);
